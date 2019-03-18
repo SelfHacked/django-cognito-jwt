@@ -56,13 +56,41 @@ class TokenValidator:
             raise TokenError("No key found for this token")
 
         try:
+            options = {
+                # make expiration required, since it's important to security
+                'require_exp': True,
+                'require_iss': True,
+                # disable audience verification and perform it explicitly
+                'verify_aud': False,
+            }
+            
             jwt_data = jwt.decode(
                 token,
                 public_key,
                 audience=self.audience,
                 issuer=self.pool_url,
                 algorithms=['RS256'],
+                options=options,
             )
+            
+            # verify audience with support for custom audiance claims
+            audience_calim_name = getattr(settings, 'COGNITO_AUDIENCE_CLAIM_NAME', 'aud')
+            self._validate_aud(jwt_data, self.audience, audience_calim_name)
         except (jwt.InvalidTokenError, jwt.ExpiredSignature, jwt.DecodeError) as exc:
             raise TokenError(str(exc))
         return jwt_data
+
+    def _validate_aud(self, payload, audience, audience_calim_name):
+        if audience_calim_name not in payload:
+            # Application specified an audience, but it could not be
+            # verified since the token does not contain a claim.
+            raise MissingRequiredClaimError(audience_calim_name)
+
+        if audience is None:
+            # Application did not specify an audience, but
+            # the token has the 'aud' claim
+            raise InvalidAudienceError('Invalid audience')
+
+        audience_claim = payload[audience_calim_name]
+        if audience_claim != audience:
+            raise InvalidAudienceError('Invalid audience')
