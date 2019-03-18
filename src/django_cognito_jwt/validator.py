@@ -56,12 +56,13 @@ class TokenValidator:
             raise TokenError("No key found for this token")
 
         try:
+            custom_audience_name = getattr(settings, 'COGNITO_CUSTOM_AUDIENCE_NAME', 'aud')
+            
             options = {
                 # make expiration required, since it's important to security
                 'require_exp': True,
-                'require_iss': True,
                 # disable audience verification and perform it explicitly
-                'verify_aud': False,
+                'verify_aud': False if custom_audience_name else True,
             }
             
             jwt_data = jwt.decode(
@@ -74,23 +75,23 @@ class TokenValidator:
             )
             
             # verify audience with support for custom audiance claims
-            audience_calim_name = getattr(settings, 'COGNITO_AUDIENCE_CLAIM_NAME', 'aud')
-            self._validate_aud(jwt_data, self.audience, audience_calim_name)
+            if custom_audience_name:
+                self._validate_aud(jwt_data, self.audience, custom_audience_name)
         except (jwt.InvalidTokenError, jwt.ExpiredSignature, jwt.DecodeError) as exc:
             raise TokenError(str(exc))
         return jwt_data
 
-    def _validate_aud(self, payload, audience, audience_calim_name):
+    def _validate_aud(self, payload, audience, custom_audience_name):
         if audience_calim_name not in payload:
             # Application specified an audience, but it could not be
             # verified since the token does not contain a claim.
-            raise MissingRequiredClaimError(audience_calim_name)
+            raise MissingRequiredClaimError(custom_audience_name)
 
         if audience is None:
             # Application did not specify an audience, but
             # the token has the 'aud' claim
             raise InvalidAudienceError('Invalid audience')
 
-        audience_claim = payload[audience_calim_name]
+        audience_claim = payload[custom_audience_name]
         if audience_claim != audience:
             raise InvalidAudienceError('Invalid audience')
