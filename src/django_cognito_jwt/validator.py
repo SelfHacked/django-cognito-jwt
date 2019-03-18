@@ -82,7 +82,7 @@ class TokenValidator:
         return jwt_data
 
     def _validate_aud(self, payload, audience, custom_audience_name):
-        if audience_calim_name not in payload:
+        if custom_audience_name not in payload:
             # Application specified an audience, but it could not be
             # verified since the token does not contain a claim.
             raise MissingRequiredClaimError(custom_audience_name)
